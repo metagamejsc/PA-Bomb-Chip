@@ -55,6 +55,9 @@ public class SelectionTrapPanel : MonoBehaviour
 
     private float _timeLeft;
     private Coroutine _timerCo;
+    [Header("Who can setup bomb? (false = use default from GameClassicPanel)")]
+    [SerializeField] private bool allowPlayer1SetupBomb  = true; // P1 chọn bomb cho board2
+    [SerializeField] private bool allowPlayer2SetupBomb = true; // P2 chọn bomb cho board1
 
     private void OnEnable()
     {
@@ -85,8 +88,16 @@ public class SelectionTrapPanel : MonoBehaviour
         totalTile = Mathf.Max(totalTile, Mathf.Max(_tilesBoardStep1.Count, _tilesBoardStep2.Count));
 
         // reset chọn
-        player1Chosen.Clear();
-        player2Chosen.Clear();
+        if (allowPlayer1SetupBomb)
+        {
+            player1Chosen.Clear();
+        }
+        if (allowPlayer2SetupBomb)
+        {
+            player2Chosen.Clear();
+        }
+        
+        
         ResetBoardVisual(_tilesBoardStep1);
         ResetBoardVisual(_tilesBoardStep2);
 
@@ -96,6 +107,14 @@ public class SelectionTrapPanel : MonoBehaviour
         if (progress1) { progress1.minValue = 0; progress1.maxValue = bombsToChoose; progress1.value = 0; }
         if (progress2) { progress2.minValue = 0; progress2.maxValue = bombsToChoose; progress2.value = 0; }
 
+        if (!allowPlayer1SetupBomb && !allowPlayer2SetupBomb)
+        {
+            ApplyToInGameAndStart();
+            return;
+        }
+
+// Nếu P1 không setup => bắt đầu từ step2 (P2)
+        currentStep = allowPlayer1SetupBomb ? 1 : 2;
         GoToStep(currentStep);
     }
 
@@ -159,7 +178,9 @@ public class SelectionTrapPanel : MonoBehaviour
         // enable nextStep chỉ khi đủ bomb (hoặc hết giờ)
         UpdateProgressUI();
 
-        StartTimer();
+        bool stepEnabled = (step == 1) ? allowPlayer1SetupBomb : allowPlayer2SetupBomb;
+        if (stepEnabled) StartTimer();
+        else StopTimer();
     }
 
     private void StartTimer()
@@ -217,8 +238,8 @@ public class SelectionTrapPanel : MonoBehaviour
             if (progressTxt2) progressTxt2.text = $"{chosenCount}/{bombsToChoose}";
         }
 
-        if (nextStep)
-            nextStep.interactable = (chosenCount >= bombsToChoose); // chỉ cho bấm khi đủ (hết giờ sẽ auto)
+        /*if (nextStep)
+            nextStep.interactable = (chosenCount >= bombsToChoose); // chỉ cho bấm khi đủ (hết giờ sẽ auto)*/
     }
 
     private void OnTileClicked(ChooseItem item)
@@ -266,27 +287,61 @@ public class SelectionTrapPanel : MonoBehaviour
         UpdateProgressUI();
     }
 
-    private void OnNextStepPressed()
+    public void OnNextStepPressed()
     {
-        // nếu chưa đủ bomb mà người dùng bấm => không cho qua (trừ khi auto do hết giờ)
-        if (currentStep == 1 && player1Chosen.Count < bombsToChoose) return;
-        if (currentStep == 2 && player2Chosen.Count < bombsToChoose) return;
-
+        // Step 1: Player1 setup BOARD1
         if (currentStep == 1)
         {
+            if (!allowPlayer1SetupBomb)
+            {
+                player1DidSetupBomb = false;
+
+                if (!allowPlayer2SetupBomb)
+                {
+                    ApplyToInGameAndStart();
+                    return;
+                }
+
+                StopTimer();
+                GoToStep(2);
+                return;
+            }
+
+            if (player1Chosen.Count < bombsToChoose) return;
+
             player1DidSetupBomb = true;
             StopTimer();
+
+            if (!allowPlayer2SetupBomb)
+            {
+                ApplyToInGameAndStart();
+                return;
+            }
+
             GoToStep(2);
             return;
         }
 
+        // Step 2: Player2 setup BOARD2
         if (currentStep == 2)
         {
+            if (!allowPlayer2SetupBomb)
+            {
+                player2DidSetupBomb = false;
+                StopTimer();
+                ApplyToInGameAndStart();
+                return;
+            }
+
+            if (player2Chosen.Count < bombsToChoose) return;
+
             player2DidSetupBomb = true;
             StopTimer();
             ApplyToInGameAndStart();
         }
     }
+
+
 
     private List<int> GetChosenIndices(List<ChooseItem> chosen, List<ChooseItem> tilesOfThatBoard)
     {
@@ -302,30 +357,34 @@ public class SelectionTrapPanel : MonoBehaviour
 
     private void ApplyToInGameAndStart()
     {
-        // Mapping “trap opponent”:
-        // - Step1: Player1 chọn bomb => bomb đặt lên Board2 (ingame)
-        // - Step2: Player2 chọn bomb => bomb đặt lên Board1 (ingame)
-        var bombsForBoard2 = GetChosenIndices(player1Chosen, _tilesBoardStep1);
-        var bombsForBoard1 = GetChosenIndices(player2Chosen, _tilesBoardStep2);
+        List<int> bombsForBoard1 = null; // BOARD1 lấy từ Player1 chọn
+        List<int> bombsForBoard2 = null; // BOARD2 lấy từ Player2 chọn
+
+        bool overrideBoard1 = allowPlayer1SetupBomb && player1DidSetupBomb;
+        bool overrideBoard2 = allowPlayer2SetupBomb && player2DidSetupBomb;
+
+        if (overrideBoard1)
+            bombsForBoard1 = GetChosenIndices(player1Chosen, _tilesBoardStep1);
+
+        if (overrideBoard2)
+            bombsForBoard2 = GetChosenIndices(player2Chosen, _tilesBoardStep2);
 
         if (gameClassic != null)
         {
-            // ghi đè manual bomb setup
             gameClassic.OverrideManualBombSetupFromSelection(
                 board1BombIndices: bombsForBoard1,
                 board2BombIndices: bombsForBoard2,
-                overrideBoard1: player2DidSetupBomb,
-                overrideBoard2: player1DidSetupBomb
+                overrideBoard1: overrideBoard1,
+                overrideBoard2: overrideBoard2
             );
 
-            // nếu ingame panel đang bật sẵn, gọi StartGame() để spawn lại theo bomb mới
-            gameClassic.StartGame();
+            gameClassic.BeginGameWithRollDice();
         }
 
-        // chuyển panel
         if (inGamePanelRoot) inGamePanelRoot.SetActive(true);
         gameObject.SetActive(false);
     }
+
 
     // Optional nếu bạn muốn instantiate tile prefab thay vì tile có sẵn
     // private void SpawnTiles(Transform root, List<ChooseItem> outList)

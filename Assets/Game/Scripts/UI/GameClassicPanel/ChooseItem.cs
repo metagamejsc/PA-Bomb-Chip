@@ -66,8 +66,8 @@ public class ChooseItem : MonoBehaviour, IPointerDownHandler
             icon.sprite = null;
         }
 
-        if (frameBlue) frameBlue.gameObject.SetActive(false);
-        if (frameRed) frameRed.gameObject.SetActive(false);
+        //if (frameBlue) frameBlue.gameObject.SetActive(false);
+        //if (frameRed) frameRed.gameObject.SetActive(false);
     }
 
     public void Reveal()
@@ -87,8 +87,8 @@ public class ChooseItem : MonoBehaviour, IPointerDownHandler
             if (!_isBomb && _chipSprite) icon.sprite = _chipSprite;
         }
 
-        if (frameBlue) frameBlue.gameObject.SetActive(!_isBomb);
-        if (frameRed) frameRed.gameObject.SetActive(_isBomb);
+        //if (frameBlue) frameBlue.gameObject.SetActive(!_isBomb);
+        //if (frameRed) frameRed.gameObject.SetActive(_isBomb);
 
         if (_isBomb && explode) explode.Play();
 
@@ -128,11 +128,13 @@ public class ChooseItem : MonoBehaviour, IPointerDownHandler
         // Nếu bạn có event setup bomb:
         if (OnClicked != null)
         {
+            AudioManager.ins.PlaySoundClick();
             OnClicked.Invoke(this);
             return;
         }
         Debug.Log("OnPointerDown");
         // Ingame:
+        AudioManager.ins.PlaySoundClick();
         _game?.OnTileClicked(this);
     }
 

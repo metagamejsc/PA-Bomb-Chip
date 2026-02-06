@@ -1,3 +1,4 @@
+using System.Collections;
 using DG.Tweening;
 using Spine.Unity;
 using System.Collections.Generic;
@@ -71,6 +72,178 @@ public class GameClassicPanel : MonoBehaviour
 
     [SerializeField] private int bombCountBoard2 = 3;
     [SerializeField] private List<int> bombIndicesBoard2 = new List<int>();
+    
+    [Header("Bomb FX (GameObject Particle)")]
+    [SerializeField] private GameObject bombFxGO;          // GameObject chứa ParticleSystem
+    [SerializeField] private ParticleSystem bombFxPS;      // (optional) nếu không kéo, sẽ tự GetComponentInChildren
+    [SerializeField] private Camera fxCamera;              // camera để ScreenToWorld (world particle). Nếu null sẽ dùng Camera.main
+    [SerializeField] private float fxDepth = 10f;          // độ sâu khi ScreenToWorld (thường = 10 nếu camera ở z=-10 và particle ở z=0)
+    
+    [Header("BOT (Player 2)")]
+    [SerializeField] private bool player2IsBot = true;
+    [SerializeField] private float botThinkDelay = 0.6f;
+    private void SetBoardUnlock(List<ChooseItem> tiles, bool on)
+    {
+        if (tiles == null) return;
+        foreach (var t in tiles)
+            if (t != null) t.unlock = on;
+    }
+
+    private void UpdateInputForTurn()
+    {
+        // mặc định: tắt hết input người chơi
+        SetBoardUnlock(player1Tile, false);
+        SetBoardUnlock(player2Tile, false);
+
+        if (_gameOver) return;
+
+        // Player1 (human) chỉ được click board2
+        if (_currentPlayerTurn == 1)
+        {
+            SetBoardUnlock(player2Tile, true);
+            return;
+        }
+
+        // Player2
+        if (_currentPlayerTurn == 2)
+        {
+            if (!player2IsBot)
+            {
+                // nếu Player2 là người chơi thật thì được click board1
+                SetBoardUnlock(player1Tile, true);
+            }
+            // nếu bot thì giữ false (không cho người bấm trong lượt bot)
+        }
+    }
+    private void StartBotTurnIfNeeded()
+    {
+        if (!player2IsBot) return;
+        if (_gameOver) return;
+        if (_currentPlayerTurn != 2) return;
+
+        if (_botCo != null) StopCoroutine(_botCo);
+        _botCo = StartCoroutine(CoBotTakeTurn());
+    }
+
+    private IEnumerator CoBotTakeTurn()
+    {
+        yield return new WaitForSeconds(botThinkDelay);
+
+        if (_gameOver) yield break;
+        if (_currentPlayerTurn != 2) yield break;
+
+        // chọn ô chưa mở trên board1 (vì bot là Player2 -> mở board đối phương = Player1 board)
+        var candidates = player1Tile.Where(t => t != null && !t.IsRevealed).ToList();
+        if (candidates.Count == 0) yield break;
+
+        var pick = candidates[Random.Range(0, candidates.Count)];
+
+        _botActing = true;
+        OnTileClicked(pick);
+        _botActing = false;
+    }
+
+    private Coroutine _botCo;
+    private bool _botActing;
+
+    private void PlayBombFxAt(ChooseItem tile)
+    {
+        if (bombFxGO == null || tile == null) return;
+
+        if (bombFxPS == null)
+            bombFxPS = bombFxGO.GetComponentInChildren<ParticleSystem>(true);
+
+        // Lấy camera của Canvas chứa tile (nếu canvas ScreenSpaceCamera/WorldSpace)
+        var tileCanvas = tile.GetComponentInParent<Canvas>();
+        Camera uiCam = null;
+        if (tileCanvas != null && tileCanvas.renderMode != RenderMode.ScreenSpaceOverlay)
+            uiCam = tileCanvas.worldCamera;
+
+        // Vị trí trung tâm tile (nếu UI)
+        var tileRect = tile.GetComponent<RectTransform>();
+        Vector3 tileWorldCenter = (tileRect != null)
+            ? tileRect.TransformPoint(tileRect.rect.center)
+            : tile.transform.position;
+
+        // 1) Nếu particle cũng là UI (RectTransform) -> đặt theo world position trực tiếp là ok
+        var fxRect = bombFxGO.GetComponent<RectTransform>();
+        if (fxRect != null && tileRect != null)
+        {
+            fxRect.position = tileWorldCenter;
+            bombFxGO.SetActive(true);
+
+            if (bombFxPS != null)
+            {
+                bombFxPS.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                bombFxPS.Play(true);
+            }
+            return;
+        }
+
+        // 2) Particle là world object: convert tile UI -> screen -> world
+        Camera cam = fxCamera != null ? fxCamera : Camera.main;
+        if (cam == null)
+        {
+            // fallback: đặt thẳng theo tile transform (có thể lệch nếu UI)
+            bombFxGO.transform.position = tileWorldCenter;
+        }
+        else
+        {
+            Vector3 screenPos = RectTransformUtility.WorldToScreenPoint(uiCam, tileWorldCenter);
+            Vector3 worldPos = cam.ScreenToWorldPoint(new Vector3(screenPos.x, screenPos.y, fxDepth));
+            bombFxGO.transform.position = worldPos;
+        }
+
+        bombFxGO.SetActive(true);
+
+        if (bombFxPS != null)
+        {
+            bombFxPS.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            bombFxPS.Play(true);
+        }
+    }
+
+    [Header("Roll Dice Flow")]
+    [SerializeField] private float rollDiceMaxWait = 2f; // timeout nếu vì lý do nào đó rollDice không tắt
+
+    private bool _waitingRollDice;
+    private Coroutine _rollCo;
+    public void BeginGameWithRollDice()
+    {
+        // reset & setup board nhưng CHƯA cho click
+        SetupGame(lockTiles: true);
+
+        // show roll dice
+        if (rollDice) rollDice.SetActive(true);
+        if (coin) coin.gameObject.SetActive(true);
+
+        // chọn người đi trước (coin result)
+        _currentPlayerTurn = randomFirstTurn ? Random.Range(1, 3) : 1;
+
+        // chờ rollDice tự tắt rồi mới start
+        if (_rollCo != null) StopCoroutine(_rollCo);
+        _rollCo = StartCoroutine(CoWaitRollDiceThenStart());
+    }
+    private IEnumerator CoWaitRollDiceThenStart()
+    {
+        _waitingRollDice = true;
+
+        float t = 0f;
+        while (rollDice != null && rollDice.activeSelf && t < rollDiceMaxWait)
+        {
+            t += Time.deltaTime;
+            yield return null;
+        }
+
+        // đảm bảo không bị kẹt overlay nếu timeout
+        if (rollDice != null) rollDice.SetActive(false);
+
+        _waitingRollDice = false;
+
+        // mở khóa tile và bắt đầu game thật
+        SetTilesInteractable(true);
+        UpdateTurnUI();
+    }
 
     public void OverrideManualBombSetupFromSelection(
         List<int> board1BombIndices,
@@ -92,15 +265,26 @@ public class GameClassicPanel : MonoBehaviour
             bombCountBoard2 = bombIndicesBoard2.Count;
         }
     }
+    private void SetTilesInteractable(bool on)
+    {
+        if (player1Tile != null)
+            foreach (var t in player1Tile) if (t != null) t.unlock = on;
+
+        if (player2Tile != null)
+            foreach (var t in player2Tile) if (t != null) t.unlock = on;
+    }
 
 // để SelectionTrapPanel gọi start ingame sau khi override xong
     public void StartGame()
     {
-        // gọi vào hàm setup/spawn game của bạn
-        SetupGame(); // nếu SetupGame đang private thì đổi nó thành internal/public
+        if (rollDice) rollDice.SetActive(false);
+        SetupGame(lockTiles: false);
+        _currentPlayerTurn = randomFirstTurn ? Random.Range(1, 3) : 1;
+        UpdateTurnUI();
     }
 
-    private void SetupGame()
+
+    private void SetupGame(bool lockTiles)
     {
         _gameOver = false;
 
@@ -111,6 +295,9 @@ public class GameClassicPanel : MonoBehaviour
 
         _chip1 = 0;
         _chip2 = 0;
+        
+        if (_botCo != null) { StopCoroutine(_botCo); _botCo = null; }
+        _botActing = false;
 
         SetupProgressUI();
         SetHealthPLayer1Change(_health1);
@@ -120,11 +307,19 @@ public class GameClassicPanel : MonoBehaviour
 
         SpawnTile();
 
-        _currentPlayerTurn = randomFirstTurn ? Random.Range(1, 3) : 1;
+        // tắt win text khi vào game mới
+        if (winRollDice) winRollDice.gameObject.SetActive(false);
+        if (confetti) confetti.SetActive(false);
 
-        if (rollDice) rollDice.SetActive(false); // nếu bạn có flow roll riêng thì chỉnh lại
-        UpdateTurnUI();
+        // LOCK/UNLOCK tile theo giai đoạn
+        SetTilesInteractable(!lockTiles);
+
+        // lưu ý: KHÔNG gọi UpdateTurnUI ở đây nếu lockTiles = true
+        // vì phải chờ RollDice xong mới hiện turn + cho click
+        if (!lockTiles)
+            UpdateTurnUI();
     }
+
     private void PlaceBombsByIndices(List<ChooseItem> tiles, int bombCount, List<int> manualIndices)
     {
         foreach (var t in tiles) t.SetBomb(false);
@@ -266,6 +461,10 @@ public class GameClassicPanel : MonoBehaviour
     // === CORE CLICK FLOW ===
     public void OnTileClicked(ChooseItem clicked)
     {
+        // nếu đang lượt bot mà không phải bot gọi thì bỏ qua
+        if (player2IsBot && _currentPlayerTurn == 2 && !_botActing) return;
+        
+        if (_waitingRollDice) return;
         if (_gameOver) return;
         if (clicked == null) return;
         if (clicked.IsRevealed) return;
@@ -276,8 +475,11 @@ public class GameClassicPanel : MonoBehaviour
         clicked.Reveal();
 
         // Nếu bomb => người đang mở mất heart
+        // Nếu bomb => người đang mở mất heart
         if (clicked.IsBomb)
         {
+            PlayBombFxAt(clicked); // <-- thêm dòng này
+            AudioManager.ins.PlaySoundBomb();
             if (_currentPlayerTurn == 1)
             {
                 _health1 = Mathf.Max(0, _health1 - 1);
@@ -289,9 +491,11 @@ public class GameClassicPanel : MonoBehaviour
                 SetHealthPLayer2Change(_health2);
             }
         }
+
         else
         {
             // Chip => an toàn, cộng chip cho người mở
+            AudioManager.ins.PlaySoundChip();
             if (_currentPlayerTurn == 1)
             {
                 _chip1++;
@@ -360,6 +564,9 @@ public class GameClassicPanel : MonoBehaviour
 
         // text cảnh báo "Player(x)'s turn"
         ShowTurnNotice(_currentPlayerTurn);
+        // NEW:
+        UpdateInputForTurn();
+        StartBotTurnIfNeeded();
     }
 
     private void ShowTurnNotice(int playerIndex)
@@ -399,7 +606,7 @@ public class GameClassicPanel : MonoBehaviour
         // khoá click
         if (player1Tile != null) foreach (var t in player1Tile) if (t) t.Lock();
         if (player2Tile != null) foreach (var t in player2Tile) if (t) t.Lock();
-
+        if (_botCo != null) { StopCoroutine(_botCo); _botCo = null; }
         if (confetti) confetti.SetActive(true);
 
         if (winRollDice)
@@ -408,6 +615,7 @@ public class GameClassicPanel : MonoBehaviour
             if (winnerPlayer == 0) winRollDice.text = "Draw!";
             else winRollDice.text = $"Player {winnerPlayer} wins!";
         }
+        LunaManager.ins.ShowWinCard();
     }
 
     // === UI UPDATE ===
