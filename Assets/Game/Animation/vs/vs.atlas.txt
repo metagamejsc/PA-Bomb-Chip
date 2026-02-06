@@ -1,0 +1,7 @@
+vs.png
+size:248,216
+filter:Linear,Linear
+pma:true
+icon_VS
+bounds:2,2,243,211
+offsets:2,2,247,215
