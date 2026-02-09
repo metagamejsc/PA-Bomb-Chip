@@ -37,7 +37,7 @@ public class LunaManager : MonoBehaviour
         EndCardEmpty.SetActive(false);
         WinCard.SetActive(false);
       
-        Invoke(nameof(ShowEndCard),timeEndCreative);
+        Invoke(nameof(ShowEndCardEmpty),timeEndCreative);
     }
   
     public void CheckClickShowEndCard()
@@ -66,7 +66,7 @@ public class LunaManager : MonoBehaviour
         if (isCretivePause) return;
         isCretivePause = true;
         AudioManager.ins.PlayMusicLose();
-        EndCard.SetActive(true);
+        Invoke(nameof(ShowEndCardPanel),2f);
         Debug.Log("Show end card");
         Luna.Unity.LifeCycle.GameEnded();
     }
@@ -74,8 +74,8 @@ public class LunaManager : MonoBehaviour
     {
         if (isCretivePause) return;
         isCretivePause = true;
-        //AudioManager.ins.PlayMusicLose();
-        EndCardEmpty.SetActive(true);
+        AudioManager.ins.PlayMusicLose();
+        Invoke(nameof(ShowEndCardEmptyPanel),0.5f);
         Debug.Log("ShowEndCardEmpty");
         Luna.Unity.LifeCycle.GameEnded();
     }
@@ -84,7 +84,7 @@ public class LunaManager : MonoBehaviour
         if (isCretivePause) return;
         isCretivePause = true;
         AudioManager.ins.PlayMusicWin();
-        WinCard.SetActive(true);
+        Invoke(nameof(ShowWinCardPanel),2f);
         Debug.Log("Show win card");
         Luna.Unity.LifeCycle.GameEnded();
     }
@@ -93,5 +93,16 @@ public class LunaManager : MonoBehaviour
         Debug.Log("Click end card");
         Luna.Unity.Playable.InstallFullGame();
     }
-
+    public void ShowEndCardPanel()
+    {
+        EndCard.SetActive(true);
+    }
+    public void ShowEndCardEmptyPanel()
+    {
+        EndCardEmpty.SetActive(true);
+    }
+    public void ShowWinCardPanel()
+    {
+        WinCard.SetActive(true);
+    }
 }

@@ -2217,6 +2217,7 @@ MonoBehaviour:
   countDrop: 0
   countDropFinal: 20
   timeEndCreative: 60
+  timeBotThinking: 2
   isCretivePause: 0
   lstBtnInstall:
   - {fileID: 6307063293086930697}

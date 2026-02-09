@@ -84,6 +84,19 @@ public class GameClassicPanel : MonoBehaviour
     [Header("BOT (Player 2)")]
     [SerializeField] private bool player2IsBot = true;
     [SerializeField] private float botThinkDelay = 0.6f;
+    
+    [Header("Win/Lose UI")]
+
+    [SerializeField] private GameObject winEffectPlayer1;
+    [SerializeField] private GameObject winEffectPlayer2;
+
+    [SerializeField] private GameObject winTextPlayer1;
+    [SerializeField] private GameObject winTextPlayer2;
+
+    [SerializeField] private GameObject loseTextPlayer1;
+    [SerializeField] private GameObject loseTextPlayer2;
+
+
     private void SetBoardUnlock(List<ChooseItem> tiles, bool on)
     {
         if (tiles == null) return;
@@ -620,20 +633,58 @@ public class GameClassicPanel : MonoBehaviour
     {
         _gameOver = true;
 
-        // khoá click
+        // Khoá click
         if (player1Tile != null) foreach (var t in player1Tile) if (t) t.Lock();
         if (player2Tile != null) foreach (var t in player2Tile) if (t) t.Lock();
         if (_botCo != null) { StopCoroutine(_botCo); _botCo = null; }
+
         if (confetti) confetti.SetActive(true);
 
+        // Tắt tất cả trước
+        if (winEffectPlayer1) winEffectPlayer1.SetActive(false);
+        if (winEffectPlayer2) winEffectPlayer2.SetActive(false);
+        if (winTextPlayer1) winTextPlayer1.SetActive(false);
+        if (winTextPlayer2) winTextPlayer2.SetActive(false);
+        if (loseTextPlayer1) loseTextPlayer1.SetActive(false);
+        if (loseTextPlayer2) loseTextPlayer2.SetActive(false);
+
+        // Hiển thị kết quả
+        bool isDraw = winnerPlayer == 0;
+
+        if (!isDraw)
+        {
+            bool p1Win = winnerPlayer == 1;
+
+            // WIN
+            if (p1Win)
+            {
+                if (winEffectPlayer1) winEffectPlayer1.SetActive(true);
+                if (winTextPlayer1) winTextPlayer1.SetActive(true);
+                if (loseTextPlayer2) loseTextPlayer2.SetActive(true);
+            }
+            else
+            {
+                if (winEffectPlayer2) winEffectPlayer2.SetActive(true);
+                if (winTextPlayer2) winTextPlayer2.SetActive(true);
+                if (loseTextPlayer1) loseTextPlayer1.SetActive(true);
+            }
+        }
+        else
+        {
+            // Optional: nếu muốn hiển thị "Draw" riêng
+        }
+
+        // Win text trung tâm (nếu có)
         if (winRollDice)
         {
             winRollDice.gameObject.SetActive(true);
-            if (winnerPlayer == 0) winRollDice.text = "Draw!";
-            else winRollDice.text = $"Player {winnerPlayer} wins!";
+            winRollDice.text = isDraw ? "Draw!" : $"Player {winnerPlayer} wins!";
         }
+
         LunaManager.ins.ShowWinCard();
     }
+
+
 
     // === UI UPDATE ===
     private void SetHealthPLayer1Change(int health)

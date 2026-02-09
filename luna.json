@@ -29905,6 +29905,10 @@
                     {
                         "name": "SetTilesInteractable",
                         "excluded": false
+                    },
+                    {
+                        "name": "Start",
+                        "excluded": false
                     }
                 ]
             },

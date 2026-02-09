@@ -1,0 +1,7 @@
+avt.png
+size:448,448
+filter:Linear,Linear
+pma:true
+frame1
+bounds:2,2,441,441
+offsets:3,3,447,447
