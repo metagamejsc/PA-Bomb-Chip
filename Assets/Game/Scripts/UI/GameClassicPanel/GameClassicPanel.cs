@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using DG.Tweening;
 using Spine.Unity;
@@ -6,6 +7,7 @@ using System.Linq;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using Random = UnityEngine.Random;
 
 public class GameClassicPanel : MonoBehaviour
 {
@@ -89,6 +91,11 @@ public class GameClassicPanel : MonoBehaviour
             if (t != null) t.unlock = on;
     }
 
+    private void Start()
+    {
+        botThinkDelay = Mathf.Max(0f, botThinkDelay);
+    }
+
     private void UpdateInputForTurn()
     {
         // mặc định: tắt hết input người chơi
@@ -100,7 +107,7 @@ public class GameClassicPanel : MonoBehaviour
         // Player1 (human) chỉ được click board2
         if (_currentPlayerTurn == 1)
         {
-            SetBoardUnlock(player2Tile, true);
+            SetBoardUnlock(player1Tile, true);
             return;
         }
 
@@ -110,7 +117,7 @@ public class GameClassicPanel : MonoBehaviour
             if (!player2IsBot)
             {
                 // nếu Player2 là người chơi thật thì được click board1
-                SetBoardUnlock(player1Tile, true);
+                SetBoardUnlock(player2Tile, true);
             }
             // nếu bot thì giữ false (không cho người bấm trong lượt bot)
         }
@@ -133,7 +140,7 @@ public class GameClassicPanel : MonoBehaviour
         if (_currentPlayerTurn != 2) yield break;
 
         // chọn ô chưa mở trên board1 (vì bot là Player2 -> mở board đối phương = Player1 board)
-        var candidates = player1Tile.Where(t => t != null && !t.IsRevealed).ToList();
+        var candidates = player2Tile.Where(t => t != null && !t.IsRevealed).ToList();
         if (candidates.Count == 0) yield break;
 
         var pick = candidates[Random.Range(0, candidates.Count)];
@@ -304,6 +311,15 @@ public class GameClassicPanel : MonoBehaviour
         SetHealthPLayer2Change(_health2);
         SetChipPLayer1Change(_chip1);
         SetChipPLayer2Change(_chip2);
+// Swap bomb index giữa board1 và board2
+        var tmpIndices = new List<int>(bombIndicesBoard1);
+        bombIndicesBoard1 = new List<int>(bombIndicesBoard2);
+        bombIndicesBoard2 = tmpIndices;
+
+// Swap bomb count nếu cần
+        int tmpCount = bombCountBoard1;
+        bombCountBoard1 = bombCountBoard2;
+        bombCountBoard2 = tmpCount;
 
         SpawnTile();
 
@@ -470,7 +486,7 @@ public class GameClassicPanel : MonoBehaviour
         if (clicked.IsRevealed) return;
 
         // Chỉ được chọn ô ở board đối phương
-        if (clicked.playerIndex == _currentPlayerTurn) return;
+        if (clicked.playerIndex != _currentPlayerTurn) return;
 
         clicked.Reveal();
 
@@ -558,9 +574,10 @@ public class GameClassicPanel : MonoBehaviour
         if (highlight1) highlight1.SetActive(p1Turn);
         if (highlight2) highlight2.SetActive(!p1Turn);
 
-        // Player 1 turn => click board2 => highlightBoard2
-        if (highlightBoard1) highlightBoard1.SetActive(!p1Turn);
-        if (highlightBoard2) highlightBoard2.SetActive(p1Turn);
+        // Player 1 turn => click board1 => highlightBoard1
+        if (highlightBoard1) highlightBoard1.SetActive(p1Turn);
+        if (highlightBoard2) highlightBoard2.SetActive(!p1Turn);
+
 
         // text cảnh báo "Player(x)'s turn"
         ShowTurnNotice(_currentPlayerTurn);

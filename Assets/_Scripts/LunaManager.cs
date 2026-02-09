@@ -11,6 +11,7 @@ public class LunaManager : MonoBehaviour
     public int countDrop=0;
     public int countDropFinal;
     [LunaPlaygroundField("Time")] public int timeEndCreative=30;
+    [LunaPlaygroundField("Time Bot Thinking")] public float timeBotThinking=2f;
     public bool isCretivePause;
     private void Awake()
     {
